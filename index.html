@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Financial Journal</title>
+    
+    <script src="assets/tailwind.js"></script>
+    <script src="assets/chart.js"></script>
+    <link rel="stylesheet" href="assets/phosphor.css">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#4f46e5',
+                        success: '#10b981',
+                        danger: '#ef4444'
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- UI Styles -->
+    <style type="text/tailwindcss">
+        @layer components {
+            .nav-item {
+                @apply w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-50 transition-all;
+            }
+            .active-nav {
+                @apply bg-primary/10 text-primary;
+            }
+            .card {
+                @apply bg-white rounded-2xl shadow-sm border border-slate-100 p-6;
+            }
+            .input-field {
+                @apply w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all;
+            }
+            .btn-primary {
+                @apply px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-sm font-medium transition-colors;
+            }
+            .btn-secondary {
+                @apply px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-medium transition-colors flex items-center gap-2;
+            }
+            .drive-badge {
+                @apply inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-600 border border-blue-100;
+            }
+        }
+        
+        body { font-family: 'Inter', sans-serif; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 h-screen flex overflow-hidden">
+
+    <!-- Sidebar -->
+    <aside class="w-64 bg-white border-r border-slate-200 flex flex-col z-10 shrink-0">
+        <div class="p-6 flex items-center gap-3">
+            <div class="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-white shadow-lg shadow-primary/30">
+                <i class="ph ph-wallet text-xl"></i>
+            </div>
+            <h1 class="font-bold text-xl text-slate-900">mLoger<span class="text-primary">UI</span></h1>
+        </div>
+        
+        <nav class="flex-1 px-4 space-y-1 mt-4 flex flex-col">
+            <button onclick="switchTab('dashboard')" id="nav-dashboard" class="nav-item active-nav"><i class="ph ph-chart-pie-slice text-lg"></i> Dashboard</button>
+            <button onclick="switchTab('journal')" id="nav-journal" class="nav-item"><i class="ph ph-list-dashes text-lg"></i> Records</button>
+            <button onclick="switchTab('settings')" id="nav-settings" class="nav-item"><i class="ph ph-gear text-lg"></i> Settings</button>
+        </nav>
+        
+        <div class="p-4 mt-auto">
+            <div class="bg-slate-900 rounded-xl p-4 text-white shadow-xl shadow-slate-900/10">
+                <p class="text-xs text-slate-400 uppercase tracking-wider mb-1">Current Balance</p>
+                <h3 class="text-2xl font-bold tracking-tight" id="global-balance">...</h3>
+            </div>
+        </div>
+    </aside>
+
+    <main class="flex-1 flex flex-col h-full relative overflow-hidden">
+        <header class="h-20 bg-white/80 backdrop-blur border-b border-slate-200 flex items-center justify-between px-8 z-10 shrink-0">
+            <div class="flex items-center gap-4 flex-1 max-w-3xl">
+                <div class="relative w-full group">
+                    <i class="ph ph-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary"></i>
+                    <input type="text" id="queryInput" placeholder="Filter records..." 
+                        class="w-full bg-slate-100 border-none rounded-xl pl-11 pr-4 py-3 text-sm focus:ring-2 focus:ring-primary/20 transition-all font-mono text-slate-600"
+                        onkeydown="if(event.key === 'Enter') executeQuery()">
+                </div>
+                <button onclick="executeQuery()" class="bg-slate-900 text-white px-5 py-3 rounded-xl text-sm font-medium shadow-lg hover:bg-slate-800 transition-all">Apply</button>
+            </div>
+            <div class="flex items-center gap-4 ml-6">
+                <button onclick="setQueryToThisWeek()" class="p-2 text-slate-400 hover:text-primary rounded-lg transition-colors" title="This Week"><i class="ph ph-calendar-check text-2xl"></i></button>
+                <button onclick="openAddModal()" class="p-2 text-primary hover:bg-primary/10 rounded-lg transition-colors" title="Add New"><i class="ph ph-plus-circle text-2xl"></i></button>
+            </div>
+        </header>
+
+        <div class="flex-1 overflow-y-auto p-8 space-y-8 bg-slate-50/50">
+
+            <!-- DASHBOARD VIEW -->
+            <div id="dashboard-view" class="view-section fade-in space-y-6">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-lg font-bold text-slate-900">Weekly Overview</h2>
+                    <span id="date-range-badge" class="px-3 py-1 bg-white border border-slate-200 rounded-full text-xs font-mono text-slate-500"></span>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="card"><h3 class="text-2xl font-bold text-emerald-600" id="stat-income">+0.00</h3><span class="text-xs uppercase text-slate-400">Income</span></div>
+                    <div class="card"><h3 class="text-2xl font-bold text-rose-600" id="stat-expense">-0.00</h3><span class="text-xs uppercase text-slate-400">Expense</span></div>
+                    <div class="card"><h3 class="text-2xl font-bold text-slate-900" id="stat-net">0.00</h3><span class="text-xs uppercase text-slate-400">Net Savings</span></div>
+                </div>
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 h-96">
+                    <div class="lg:col-span-2 card flex flex-col"><div class="flex-1 relative w-full"><canvas id="mainChart"></canvas></div></div>
+                    <div class="card flex flex-col"><div class="flex-1 relative w-full flex items-center justify-center"><canvas id="pieChart"></canvas></div></div>
+                </div>
+            </div>
+
+            <!-- JOURNAL VIEW -->
+            <div id="journal-view" class="view-section hidden fade-in">
+                <div class="card p-0 overflow-hidden border border-slate-200">
+                    <table class="w-full text-left">
+                        <thead class="bg-slate-50 border-b border-slate-200 text-xs uppercase text-slate-500 font-semibold">
+                            <tr><th class="p-4 w-40">Date</th><th class="p-4 text-right w-32">Net Change</th><th class="p-4">Transactions</th></tr>
+                        </thead>
+                        <tbody id="journal-table-body" class="text-sm divide-y divide-slate-100 bg-white"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- SETTINGS VIEW -->
+            <div id="settings-view" class="view-section hidden fade-in max-w-3xl mx-auto space-y-6">
+                
+                <!-- Google Drive Integration -->
+                <div class="card border-blue-100 space-y-4">
+                    <div class="flex items-center justify-between">
+                        <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+                            <i class="ph ph-google-logo text-blue-600"></i> Google Drive Sync
+                        </h2>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="driveToggle" class="sr-only peer" onchange="toggleDrive()">
+                            <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                        </label>
+                    </div>
+
+                    <div id="driveSettings" class="space-y-4 hidden">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="text-xs font-semibold text-slate-500">Credentials Path</label>
+                                <input type="text" id="driveCreds" value="credentials.json" class="input-field mt-1">
+                            </div>
+                            <div>
+                                <label class="text-xs font-semibold text-slate-500">Token Path (Generated)</label>
+                                <input type="text" id="driveToken" value="token.json" class="input-field mt-1">
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between pt-2 border-t border-slate-100 mt-2">
+                            <span class="text-xs text-slate-400" id="driveLastSync">Last Synced: Never</span>
+                            <div class="flex gap-2">
+                                <button onclick="drivePush()" class="btn-primary flex items-center gap-2 text-xs"><i class="ph ph-upload-simple"></i> Push Now</button>
+                                <button onclick="openDriveModal()" class="btn-secondary text-xs"><i class="ph ph-clock-counter-clockwise"></i> Versions</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- LAN Sources -->
+                <div class="card space-y-4">
+                    <div class="flex items-center justify-between">
+                        <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2"><i class="ph ph-globe"></i> LAN Data Sources</h2>
+                        <button onclick="scanLan()" id="scanBtn" class="bg-indigo-50 text-indigo-600 px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-indigo-100 transition-colors flex items-center gap-1">
+                            <i class="ph ph-radar"></i> Scan
+                        </button>
+                    </div>
+                    <div class="flex gap-2">
+                        <input type="text" id="newSourceUrl" placeholder="https://... or C:/path/to/file.txt" class="input-field">
+                        <button onclick="addSource()" class="btn-primary">Add</button>
+                    </div>
+                    <ul id="sourcesList" class="space-y-2"></ul>
+                    <button onclick="syncAll()" class="btn-secondary w-full justify-center"><i class="ph ph-arrows-clockwise"></i> Sync All Now</button>
+                </div>
+
+                <!-- Local Backups -->
+                <div class="card space-y-4">
+                    <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2"><i class="ph ph-hard-drives"></i> Local Backups</h2>
+                    <ul id="backupsList" class="space-y-2 max-h-40 overflow-y-auto"></ul>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- DRIVE VERSIONS MODAL -->
+    <div id="driveModal" class="fixed inset-0 bg-slate-900/50 hidden flex items-center justify-center z-50 backdrop-blur-sm p-4">
+        <div class="bg-white rounded-2xl p-6 w-full max-w-2xl shadow-2xl h-[80vh] flex flex-col">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-bold">Drive Backup Versions</h3>
+                <button onclick="document.getElementById('driveModal').classList.add('hidden')" class="text-slate-400 hover:text-slate-600"><i class="ph ph-x text-xl"></i></button>
+            </div>
+            <div class="flex-1 overflow-y-auto border rounded-xl border-slate-100 mb-4">
+                <table class="w-full text-left text-sm">
+                    <thead class="bg-slate-50 text-slate-500 uppercase text-xs sticky top-0"><tr><th class="p-3">Filename</th><th class="p-3">Created</th><th class="p-3 text-right">Action</th></tr></thead>
+                    <tbody id="driveVersionsList" class="divide-y divide-slate-100"></tbody>
+                </table>
+            </div>
+            <div class="bg-slate-50 p-3 rounded-lg text-xs font-mono text-slate-600 h-32 overflow-y-auto" id="drivePreviewBox">
+                Select a version to preview content here...
+            </div>
+        </div>
+    </div>
+
+    <!-- EDIT MODAL (Existing) -->
+    <div id="editModal" class="fixed inset-0 bg-slate-900/50 hidden flex items-center justify-center z-50 backdrop-blur-sm p-4">
+        <div class="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+            <h3 class="text-lg font-bold mb-4">Edit Transaction</h3>
+            <input type="hidden" id="editDate"><input type="hidden" id="editIndex">
+            <div class="space-y-4">
+                <div><label class="text-xs font-semibold text-slate-500 uppercase">Amount</label><input type="number" step="0.01" id="editAmount" class="input-field font-mono text-lg"></div>
+                <div><label class="text-xs font-semibold text-slate-500 uppercase">Tags</label><input type="text" id="editTags" class="input-field"></div>
+            </div>
+            <div class="flex gap-3 mt-8">
+                <button onclick="deleteTransaction()" class="text-rose-600 text-sm">Delete</button><div class="flex-1"></div>
+                <button onclick="closeModal()" class="text-slate-500 text-sm">Cancel</button><button onclick="saveEdit()" class="btn-primary">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Drive Logic ---
+        let driveConfig = { enabled: false };
+
+        async function get_drive_config(){
+            driveConfig = await window.pywebview.api.get_drive_settings()
+            document.getElementById('driveToggle').checked = driveConfig.enabled;
+            document.getElementById('driveSettings').classList.toggle('hidden', !driveConfig.enabled);
+        }
+
+        async function toggleDrive() {
+            const enabled = document.getElementById('driveToggle').checked;
+            const creds = document.getElementById('driveCreds').value;
+            const token = document.getElementById('driveToken').value;
+            
+            const res = await window.pywebview.api.save_drive_settings(enabled, creds, token);
+            if(res.status === 'error') {
+                alert("Drive Error: " + res.message);
+                document.getElementById('driveToggle').checked = false;
+                document.getElementById('driveSettings').classList.add('hidden');
+            } else {
+                document.getElementById('driveSettings').classList.toggle('hidden', !enabled);
+                alert("Drive Settings Saved: " + res.message);
+            }
+        }
+
+        async function drivePush() {
+            const btn = event.target; 
+            const txt = btn.innerText; btn.innerText = "Pushing..."; btn.disabled=true;
+            const res = await window.pywebview.api.drive_push();
+            alert(res.message);
+            if(res.status==='success') document.getElementById('driveLastSync').innerText = "Last Synced: " + res.last_synced;
+            btn.innerText = txt; btn.disabled=false;
+        }
+
+        async function openDriveModal() {
+            document.getElementById('driveModal').classList.remove('hidden');
+            document.getElementById('driveVersionsList').innerHTML = '<tr><td colspan="3" class="p-4 text-center">Loading...</td></tr>';
+            const res = await window.pywebview.api.drive_list_versions();
+            
+            if(res.status==='error') { 
+                document.getElementById('driveVersionsList').innerHTML = `<tr><td colspan="3" class="p-4 text-red-500">${res.message}</td></tr>`;
+                return;
+            }
+            
+            const tbody = document.getElementById('driveVersionsList');
+            tbody.innerHTML = res.files.map(f => `
+                <tr class="hover:bg-slate-50">
+                    <td class="p-3 font-medium">${f.name}</td>
+                    <td class="p-3 text-slate-500">${new Date(f.createdTime).toLocaleString()}</td>
+                    <td class="p-3 text-right gap-2 flex justify-end">
+                        <button onclick="previewDrive('${f.id}')" class="text-blue-600 hover:text-blue-800 text-xs font-medium">Preview</button>
+                        <button onclick="applyDrive('${f.id}')" class="text-emerald-600 hover:text-emerald-800 text-xs font-medium border border-emerald-200 px-2 rounded">Apply</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        async function previewDrive(fid) {
+            document.getElementById('drivePreviewBox').innerText = "Downloading preview...";
+            const res = await window.pywebview.api.drive_preview_version(fid);
+            if(res.status === 'success') document.getElementById('drivePreviewBox').innerText = res.preview;
+            else alert(res.message);
+        }
+
+        async function applyDrive(fid) {
+            if(!confirm("Overwrite local data with this version? Current data will be backed up locally first.")) return;
+            const res = await window.pywebview.api.drive_apply_version(fid);
+            alert(res.message);
+            document.getElementById('driveModal').classList.add('hidden');
+            executeQuery();
+        }
+
+        // --- Core UI Logic & Week Calculation ---
+        
+        let mainChart, pieChart;
+
+        // ** FIXED DATE LOGIC HERE **
+        function getThisWeekQuery() {
+            const now = new Date();
+            const dayOfWeek = now.getDay(); // 0(Sun) - 6(Sat)
+            const numDay = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // 0(Mon) - 6(Sun)
+
+            const start = new Date(now);
+            start.setDate(now.getDate() - numDay);
+            start.setHours(0,0,0,0);
+
+            const end = new Date(start);
+            end.setDate(start.getDate() + 6);
+            end.setHours(23,59,59,999);
+
+            const fmt = (d) => {
+                const dd = String(d.getDate()).padStart(2, '0');
+                const mm = String(d.getMonth() + 1).padStart(2, '0');
+                const yyyy = d.getFullYear();
+                return `${dd}/${mm}/${yyyy}`;
+            };
+            
+            // Returns query string for backend
+            return `date >= ${fmt(start)} & date <= ${fmt(end)}`;
+        }
+
+        function setQueryToThisWeek() {
+            const q = getThisWeekQuery();
+            document.getElementById('queryInput').value = q;
+            document.getElementById('date-range-badge').innerText = "Current Week";
+            executeQuery();
+        }
+
+        function switchTab(id) {
+            document.querySelectorAll('.view-section').forEach(el => el.classList.add('hidden'));
+            document.getElementById(id + '-view').classList.remove('hidden');
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active-nav'));
+            document.getElementById('nav-' + id).classList.add('active-nav');
+            if(id === 'settings') loadSettings();
+        }
+
+        async function executeQuery() {
+            const query = document.getElementById('queryInput').value || "date > 01/01/2000";
+            try {
+                const stats = await window.pywebview.api.get_statistics(query);
+                const records = await window.pywebview.api.get_records(query);
+                const bal = await window.pywebview.api.get_current_balance();
+                document.getElementById('global-balance').innerText = bal.toFixed(2);
+                updateStats(stats); updateTable(records); updateCharts(records, stats);
+            } catch (e) { console.error(e); }
+        }
+
+        function updateStats(stats) {
+            document.getElementById('stat-income').innerText = "+" + stats.total_income.toFixed(2);
+            document.getElementById('stat-expense').innerText = stats.total_expense.toFixed(2);
+            document.getElementById('stat-net').innerText = stats.net_savings.toFixed(2);
+        }
+
+        function updateTable(records) {
+            const tbody = document.getElementById('journal-table-body');
+            tbody.innerHTML = '';
+            records.forEach(rec => {
+                let transHtml = rec.transactions.map((t, idx) => {
+                    const color = t.amount > 0 ? 'text-emerald-700 bg-emerald-50' : 'text-rose-700 bg-rose-50';
+                    return `<button onclick="openEditModal('${rec.date}', ${idx}, ${t.amount}, '${t.tags.join(', ')}')" class="inline-flex items-center gap-1 px-2 py-1 rounded text-xs border border-transparent hover:border-slate-300 ${color} mr-1 mb-1">${t.amount} ${t.tags.length ? '('+t.tags.join(',')+')' : ''}</button>`;
+                }).join('');
+                tbody.innerHTML += `<tr class="hover:bg-slate-50"><td class="p-4 font-medium">${rec.date} <span class="text-xs text-slate-400 uppercase">${rec.day_name}</span></td><td class="p-4 text-right font-bold ${rec.net_change >=0?'text-emerald-600':'text-rose-600'}">${rec.net_change.toFixed(2)}</td><td class="p-4">${transHtml}</td></tr>`;
+            });
+        }
+
+        function updateCharts(records, stats) {
+            const r = [...records].reverse();
+            if(mainChart) mainChart.destroy();
+            mainChart = new Chart(document.getElementById('mainChart'), {
+                type: 'bar', data: { labels: r.map(x=>x.date.substring(0,5)), datasets: [{label:'Inc', data:r.map(x=>x.income), bg:'#10b981'}, {label:'Exp', data:r.map(x=>Math.abs(x.expense)), bg:'#ef4444'}] },
+                options: { responsive:true, maintainAspectRatio:false, scales:{x:{stacked:true}, y:{stacked:false}} }
+            });
+            if(pieChart) pieChart.destroy();
+            pieChart = new Chart(document.getElementById('pieChart'), {
+                type: 'doughnut', data: { labels: Object.keys(stats.tag_breakdown), datasets: [{ data: Object.values(stats.tag_breakdown), backgroundColor:['#ef4444','#f59e0b','#3b82f6','#8b5cf6','#64748b'] }] },
+                options: { responsive:true, maintainAspectRatio:false, cutout:'70%' }
+            });
+        }
+
+        // --- Modals ---
+        function openEditModal(d,i,a,t) { 
+            document.getElementById('editDate').value=d; document.getElementById('editIndex').value=i; 
+            document.getElementById('editAmount').value=a; document.getElementById('editTags').value=t;
+            document.getElementById('editModal').classList.remove('hidden'); 
+        }
+        function openAddModal() { const d = new Date().toLocaleDateString('en-GB'); openEditModal(d,-1,'',''); }
+        function closeModal() { document.getElementById('editModal').classList.add('hidden'); }
+        async function saveEdit() { 
+            const d=document.getElementById('editDate').value, i=parseInt(document.getElementById('editIndex').value), a=parseFloat(document.getElementById('editAmount').value), t=document.getElementById('editTags').value.split(',').filter(x=>x.trim());
+            const res = i===-1 ? await window.pywebview.api.add_transaction(d,a,t) : await window.pywebview.api.update_transaction(d,i,a,t);
+            if(res.status==='success') { closeModal(); executeQuery(); } else alert(res.message);
+        }
+        async function deleteTransaction() {
+            if(!confirm("Delete?")) return;
+            const res = await window.pywebview.api.delete_transaction(document.getElementById('editDate').value, parseInt(document.getElementById('editIndex').value));
+            if(res.status==='success') { closeModal(); executeQuery(); }
+        }
+
+        // --- Settings Load ---
+        async function loadSettings() {
+            const sources = await window.pywebview.api.get_sources();
+            document.getElementById('sourcesList').innerHTML = sources.map(s => `<li class="flex justify-between bg-slate-50 p-2 rounded text-xs border border-slate-100"><span>${s}</span><button onclick="removeSource('${s}')" class="text-rose-500"><i class="ph ph-trash"></i></button></li>`).join('');
+        }
+        
+        async function scanLan() {
+            const btn=document.getElementById('scanBtn'); btn.innerHTML='<i class="ph ph-spinner animate-spin"></i>';
+            const res = await window.pywebview.api.scan_network_and_sync();
+            alert(res.message); loadSettings(); executeQuery(); btn.innerHTML='<i class="ph ph-radar"></i> Scan';
+        }
+        async function addSource() { await window.pywebview.api.add_source(document.getElementById('newSourceUrl').value); loadSettings(); }
+        async function removeSource(u) { await window.pywebview.api.remove_source(u); loadSettings(); }
+        async function syncAll() { const r = await window.pywebview.api.sync_all_sources(); alert(r.join('\n')); executeQuery(); }
+
+        window.addEventListener('pywebviewready', function() {
+            setQueryToThisWeek();
+            get_drive_config();
+        });
+    </script>
+</body>
+</html>
